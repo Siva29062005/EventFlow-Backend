@@ -3,7 +3,7 @@
 const pool = require('../config/db'); // Import the connection pool for transactions
 const bookingModel = require('../models/bookingModel');
 const eventModel = require('../models/eventModel');
-const emailService = require('../services/emailService'); // Corrected import path
+const emailService = require('../config/emailService'); // Corrected import path
 
 const bookEvent = async (req, res) => {
     const { eventId, numberOfTickets } = req.body;
