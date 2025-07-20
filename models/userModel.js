@@ -42,6 +42,11 @@ const getAllUsers = async (limit, offset) => {
     return { users: rows, total: totalRows[0].total };
 };
 
+const getTotalUsersCount = async () => {
+    const [rows] = await pool.execute('SELECT COUNT(*) as total FROM users');
+    return rows[0].total;
+};
+
 
 const updateUserRole = async (id, role) => {
     const [result] = await pool.execute(
@@ -59,6 +64,7 @@ const deleteUser = async (id) => {
 module.exports = {
     create,
     findByEmail,
+    getTotalUsersCount,
     findById,
     getAllUsers,
     updateUserRole,

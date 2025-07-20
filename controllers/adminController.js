@@ -4,8 +4,7 @@ const pool = require('../config/db');
 
 const getDashboardAnalytics = async (req, res) => {
     try {
-         const [totalUsersResult] = await pool.execute('SELECT COUNT(*) as total FROM users');
-        const totalUsers = totalUsersResult[0].total;
+        const totalUsers = await userModel.getTotalUsersCount(); // <--- Use userModel here
         const totalBookings = await bookingModel.getTotalBookingsCount();
         const topEvents = await bookingModel.getTopEventsByBookings(5);
 
@@ -19,7 +18,6 @@ const getDashboardAnalytics = async (req, res) => {
         res.status(500).json({ message: 'Internal server error fetching admin analytics.' });
     }
 };
-
 // Admin can manage users (e.g., change roles, delete users)
 const getAllUsersAdmin = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
