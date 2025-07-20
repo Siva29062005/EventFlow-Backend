@@ -3,7 +3,7 @@
 const pool = require('../config/db'); // Import the connection pool for transactions
 const bookingModel = require('../models/bookingModel');
 const eventModel = require('../models/eventModel');
-const emailService = require('../config/emailService'); // Corrected import path
+const emailService = require('../config/emailService'); // CORRECTED IMPORT PATH
 
 const bookEvent = async (req, res) => {
     const { eventId, numberOfTickets } = req.body; // Destructure numberOfTickets
@@ -69,7 +69,7 @@ const bookEvent = async (req, res) => {
         // Optional: Send email notification
         const emailSubject = `Event Booking Confirmation: ${event.title}`;
         const emailHtml = `
-            <p>Dear ${req.user.email},</p>
+            <p>Dear ${userEmail},</p>
             <p>Your booking for the event <strong>${event.title}</strong> has been confirmed!</p>
             <p><strong>Event Date:</strong> ${new Date(event.event_date).toLocaleString()}</p>
             <p><strong>Venue:</strong> ${event.venue}</p>
