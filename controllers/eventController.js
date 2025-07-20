@@ -38,7 +38,7 @@ function extractPublicIdFromCloudinaryUrl(url) {
 const createEvent = async (req, res) => {
     const { title, description, venue, event_date, capacity } = req.body;
     const organizerId = req.user.id; // From authenticated user token
-    const organizerUsername = req.user.username; // Assuming username is available on req.user
+    const organizerUsername = req.user.username; // Still get it from req.user for logging/other uses if needed
 
     let imageUrl = null; // Initialize imageUrl to null
 
@@ -73,7 +73,7 @@ const createEvent = async (req, res) => {
         // Pass the parsed (Date object) event_date, capacity (number), and imageUrl
         const newEvent = await eventModel.create(
             organizerId,
-            organizerUsername, // Pass username to model for storing
+            // organizerUsername, // <--- REMOVE THIS LINE: organizerUsername is no longer a parameter for eventModel.create
             title,
             description,
             venue,

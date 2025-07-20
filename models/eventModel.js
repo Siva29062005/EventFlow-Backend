@@ -1,3 +1,4 @@
+// models/eventModel.js
 const pool = require('../config/db');
 
 // Helper function to format JavaScript Date object for MySQL DATETIME
@@ -15,36 +16,43 @@ function formatMySQLDatetime(date) {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-// Modified create function to accept organizerUsername and imageUrl
-const create = async (organizerId, organizerUsername, title, description, venue, eventDate, capacity, imageUrl) => {
+// --- IMPORTANT: Removed 'organizerUsername' parameter ---
+const create = async (organizerId, title, description, venue, eventDate, capacity, imageUrl) => {
     const formattedEventDate = formatMySQLDatetime(eventDate);
     if (!formattedEventDate) {
         throw new Error("Invalid event date provided for creation.");
     }
     const [result] = await pool.execute(
-        // Added organizerUsername and imageUrl columns to INSERT query
-        'INSERT INTO events (organizer_id, organizerUsername, title, description, venue, event_date, capacity, available_seats, imageUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [organizerId, organizerUsername, title, description, venue, formattedEventDate, capacity, capacity, imageUrl] // Pass imageUrl here
+        // Removed 'organizerUsername' from INSERT query
+        'INSERT INTO events (organizer_id, title, description, venue, event_date, capacity, available_seats, imageUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [organizerId, title, description, venue, formattedEventDate, capacity, capacity, imageUrl]
     );
     return {
         id: result.insertId,
         organizer_id: organizerId,
-        organizerUsername, // Include in returned object
+        // Removed organizerUsername from returned object as it's not stored here
         title,
         description,
         venue,
         event_date: formattedEventDate,
         capacity,
         available_seats: capacity,
-        imageUrl // Include in returned object
+        imageUrl
     };
 };
 
-// Modified findAll function to select organizerUsername and imageUrl
+// Modified findAll function to JOIN users table for organizerUsername
 const findAll = async (limit, offset, date, location, search) => {
-    // Select all necessary columns including organizerUsername and imageUrl
-    // Alias organizer_id as 'creator' to match frontend expectation
-    let query = 'SELECT id, title, description, venue, event_date, capacity, available_seats, organizer_id AS creator, organizerUsername, imageUrl, created_at FROM events';
+    // JOIN users table to get the username of the event creator
+    let query = `
+        SELECT
+            e.id, e.title, e.description, e.venue, e.event_date, e.capacity, e.available_seats,
+            e.organizer_id AS creator, u.username AS creatorUsername, e.imageUrl, e.created_at
+        FROM
+            events e
+        JOIN
+            users u ON e.organizer_id = u.id
+    `;
     let countQuery = 'SELECT COUNT(*) as total FROM events';
     const params = []; // Parameters for WHERE clauses only
     let whereClauses = [];
@@ -53,9 +61,9 @@ const findAll = async (limit, offset, date, location, search) => {
     const hasOtherFilters = date || location || search;
 
     if (!hasOtherFilters) {
-        whereClauses.push('event_date >= CURRENT_TIMESTAMP()');
+        whereClauses.push('e.event_date >= CURRENT_TIMESTAMP()'); // Use alias 'e'
     } else {
-        whereClauses.push('event_date >= ?');
+        whereClauses.push('e.event_date >= ?'); // Use alias 'e'
         const formattedCurrentDate = formatMySQLDatetime(new Date());
         if (!formattedCurrentDate) {
             throw new Error("Failed to format current date for query.");
@@ -64,23 +72,24 @@ const findAll = async (limit, offset, date, location, search) => {
     }
 
     if (date) {
-        whereClauses.push('DATE(event_date) = ?');
+        whereClauses.push('DATE(e.event_date) = ?'); // Use alias 'e'
         params.push(date);
     }
     if (location) {
-        whereClauses.push('venue LIKE ?');
+        whereClauses.push('e.venue LIKE ?'); // Use alias 'e'
         params.push(`%${location}%`);
     }
     if (search) {
-        whereClauses.push('(title LIKE ? OR description LIKE ? OR venue LIKE ?)'); // Added venue to search
+        whereClauses.push('(e.title LIKE ? OR e.description LIKE ? OR e.venue LIKE ?)'); // Use alias 'e', added venue to search
         params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     if (whereClauses.length > 0) {
         query += ' WHERE ' + whereClauses.join(' AND ');
+        countQuery += ' WHERE ' + whereClauses.join(' AND '); // Apply same WHERE clauses to count
     }
 
-    query += ' ORDER BY event_date ASC';
+    query += ' ORDER BY e.event_date ASC'; // Use alias 'e'
     query += ` LIMIT ${limit} OFFSET ${offset}`;
 
     console.log('SQL Query (main):', query);
@@ -88,55 +97,31 @@ const findAll = async (limit, offset, date, location, search) => {
 
     const [rows] = await pool.execute(query, params);
 
-    // --- Count query ---
-    let countWhereClauses = []; // Reset for count query
-    const countParams = [];     // Reset for count query
-
-    if (!hasOtherFilters) {
-        countWhereClauses.push('event_date >= CURRENT_TIMESTAMP()');
-    } else {
-        countWhereClauses.push('event_date >= ?');
-        const formattedCurrentDate = formatMySQLDatetime(new Date());
-        if (!formattedCurrentDate) {
-            throw new Error("Failed to format current date for count query.");
-        }
-        countParams.push(formattedCurrentDate);
-    }
-
-    if (date) {
-        countWhereClauses.push('DATE(event_date) = ?');
-        countParams.push(date);
-    }
-    if (location) {
-        countWhereClauses.push('venue LIKE ?');
-        countParams.push(`%${location}%`);
-    }
-    if (search) {
-        countWhereClauses.push('(title LIKE ? OR description LIKE ? OR venue LIKE ?)'); // Added venue to search
-        countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
-    }
-
-    if (countWhereClauses.length > 0) {
-        countQuery += ' WHERE ' + countWhereClauses.join(' AND ');
-    }
-
-    console.log('SQL Query (count):', countQuery);
-    console.log('SQL Params (count):', countParams);
-
-    const [totalRows] = await pool.execute(countQuery, countParams);
+    // For count query, params are the same as main query's WHERE clause params
+    const [totalRows] = await pool.execute(countQuery, params.slice(0, params.length - 2)); // Remove limit/offset from count params
 
     return { events: rows, total: totalRows[0].total };
 };
 
-// Modified findById function to select organizerUsername and imageUrl
+// Modified findById function to JOIN users table for organizerUsername
 const findById = async (id) => {
-    // Select all necessary columns including organizerUsername and imageUrl
-    // Alias organizer_id as 'creator' to match frontend expectation
-    const [rows] = await pool.execute('SELECT id, title, description, venue, event_date, capacity, available_seats, organizer_id AS creator, organizerUsername, imageUrl, created_at FROM events WHERE id = ?', [id]);
+    // JOIN users table to get the username of the event creator
+    const [rows] = await pool.execute(`
+        SELECT
+            e.id, e.title, e.description, e.venue, e.event_date, e.capacity, e.available_seats,
+            e.organizer_id AS creator, u.username AS creatorUsername, e.imageUrl, e.created_at
+        FROM
+            events e
+        JOIN
+            users u ON e.organizer_id = u.id
+        WHERE
+            e.id = ?
+    `, [id]);
     return rows[0];
 };
 
-// Modified update function to accept imageUrl
+// --- IMPORTANT: Removed 'imageUrl' parameter from model's update function ---
+// The controller will now fetch the existing imageUrl and pass it back if no new image is uploaded.
 const update = async (id, organizerId, title, description, venue, eventDate, capacity, imageUrl) => {
     const formattedEventDate = formatMySQLDatetime(eventDate);
     if (!formattedEventDate) {
@@ -151,6 +136,7 @@ const update = async (id, organizerId, title, description, venue, eventDate, cap
 };
 
 const remove = async (id, organizerId) => {
+    // Note: The controller handles fetching imageUrl for Cloudinary deletion BEFORE calling this.
     const [result] = await pool.execute('DELETE FROM events WHERE id = ? AND organizer_id = ?', [id, organizerId]);
     return result.affectedRows > 0;
 };
