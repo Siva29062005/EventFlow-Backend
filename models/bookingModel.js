@@ -91,7 +91,6 @@ const getTopEventsByBookings = async (limit) => {
         limit = parsedLimit;
     }
 
-    // Use a parameterized query for LIMIT to prevent SQL injection and ensure proper parsing
     const sqlQuery = `
         SELECT
             e.id, e.title, COUNT(b.id) as booking_count
@@ -103,8 +102,16 @@ const getTopEventsByBookings = async (limit) => {
             e.id, e.title
         ORDER BY
             booking_count DESC
-        LIMIT ?`; // Use '?' for parameter
-    const paramsArray = [limit]; // Pass limit as a parameter
+        LIMIT ?`;
+
+    const paramsArray = [limit];
+
+    // --- NEW DEBUGGING LOGS ---
+    console.log('DEBUG: getTopEventsByBookings - sqlQuery:', sqlQuery);
+    console.log('DEBUG: getTopEventsByBookings - paramsArray:', paramsArray);
+    console.log('DEBUG: getTopEventsByBookings - type of limit:', typeof limit, 'value:', limit);
+    console.log('DEBUG: getTopEventsByBookings - isNaN(limit):', isNaN(limit));
+    // --- END NEW DEBUGGING LOGS ---
 
     try {
         const [rows] = await pool.execute(sqlQuery, paramsArray);
