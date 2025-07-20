@@ -38,21 +38,25 @@ function extractPublicIdFromCloudinaryUrl(url) {
 const createEvent = async (req, res) => {
     // --- DEBUGGING LOG 5: AT START OF CONTROLLER ---
     console.log('--- Inside createEvent Controller (Final Check) ---');
-    console.log('req.body (in controller):', req.body); // <<<--- SHOULD NOW HAVE YOUR TEXT DATA
-    console.log('req.file (in controller):', req.file); // <<<--- SHOULD NOW HAVE YOUR FILE DATA
+    console.log('req.body (in controller):', req.body);
+    console.log('req.file (in controller):', req.file);
     console.log('--------------------------------------------------');
     // --- END DEBUGGING LOG ---
 
     const { title, description, venue, event_date, capacity } = req.body;
-    const organizerId = req.user.id;
-    // const organizerUsername = req.user.username; // No longer passed to model.create
 
-    let imageUrl = null;
+    // --- NEW DEBUGGING LOGS ---
+    console.log('Destructured title:', title);
+    console.log('Destructured description:', description);
+    console.log('Destructured venue:', venue);
+    console.log('Destructured event_date:', event_date);
+    console.log('Destructured capacity:', capacity);
+    // --- END NEW DEBUGGING LOGS ---
 
+    // THIS IS THE LINE THAT IS NOW CAUSING THE ERROR:
     if (!title || !venue || !event_date || !capacity) {
         return res.status(400).json({ message: 'Missing required event fields: title, venue, event_date, capacity.' });
     }
-
 
     // Input validation for event_date and capacity
     const parsedEventDate = new Date(event_date);
