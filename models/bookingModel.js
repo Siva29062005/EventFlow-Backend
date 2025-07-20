@@ -86,11 +86,13 @@ const getTopEventsByBookings = async (limit) => {
     const parsedLimit = parseInt(limit, 10);
     if (isNaN(parsedLimit) || parsedLimit <= 0) {
         console.warn('Invalid limit provided for getTopEventsByBookings, defaulting to 5.');
-        limit = 5;
+        limit = 5; // Default to 5 if invalid
     } else {
-        limit = parsedLimit;
+        limit = parsedLimit; // Use the parsed (numeric) value
     }
 
+    // --- CRITICAL CHANGE HERE ---
+    // Instead of LIMIT ?, directly embed the validated limit into the query string
     const sqlQuery = `
         SELECT
             e.id, e.title, COUNT(b.id) as booking_count
@@ -102,19 +104,18 @@ const getTopEventsByBookings = async (limit) => {
             e.id, e.title
         ORDER BY
             booking_count DESC
-        LIMIT ?`;
+        LIMIT ${limit}`; // <--- Directly embed 'limit' here
+    const paramsArray = []; // <--- No parameters needed for LIMIT now
 
-    const paramsArray = [limit];
-
-    // --- NEW DEBUGGING LOGS ---
+    // --- Keep debugging logs for now, or remove them after this fix ---
     console.log('DEBUG: getTopEventsByBookings - sqlQuery:', sqlQuery);
-    console.log('DEBUG: getTopEventsByBookings - paramsArray:', paramsArray);
+    console.log('DEBUG: getTopEventsByBookings - paramsArray:', paramsArray); // Should be empty
     console.log('DEBUG: getTopEventsByBookings - type of limit:', typeof limit, 'value:', limit);
     console.log('DEBUG: getTopEventsByBookings - isNaN(limit):', isNaN(limit));
-    // --- END NEW DEBUGGING LOGS ---
+    // --- END DEBUGGING LOGS ---
 
     try {
-        const [rows] = await pool.execute(sqlQuery, paramsArray);
+        const [rows] = await pool.execute(sqlQuery, paramsArray); // Pass empty array
         return rows;
     } catch (error) {
         console.error('ERROR during getTopEventsByBookings query:', error);
