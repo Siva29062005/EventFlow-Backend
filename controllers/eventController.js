@@ -44,6 +44,7 @@ const createEvent = async (req, res) => {
     // --- END DEBUGGING LOG ---
 
     const { title, description, venue, event_date, capacity } = req.body;
+    const organizerId=req.user.id;
 
     // --- NEW DEBUGGING LOGS ---
     console.log('Destructured title:', title);
