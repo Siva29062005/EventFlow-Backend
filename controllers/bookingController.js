@@ -3,12 +3,12 @@
 const pool = require('../config/db'); // Import the connection pool for transactions
 const bookingModel = require('../models/bookingModel');
 const eventModel = require('../models/eventModel');
-const emailService = require('../config/emailService'); // CORRECTED IMPORT PATH
+const emailService = require('../services/emailService'); // Corrected import path
 
 const bookEvent = async (req, res) => {
-    const { eventId, numberOfTickets } = req.body; // Destructure numberOfTickets
+    const { eventId, numberOfTickets } = req.body;
     const userId = req.user.id;
-    const userEmail = req.user.email; // Get user email for sending confirmation
+    const userEmail = req.user.email;
 
     if (!eventId || !numberOfTickets) {
         return res.status(400).json({ message: 'Event ID and number of tickets are required.' });
@@ -21,18 +21,21 @@ const bookEvent = async (req, res) => {
 
     let connection;
     try {
-        connection = await pool.getConnection(); // Get a connection from the pool
-        await connection.beginTransaction(); // Start transaction
+        // --- ADDED DEBUGGING LOGS HERE ---
+        console.log('DEBUG: In bookEvent - Before getting connection from pool');
+        console.log('DEBUG: Pool object in bookEvent:', pool); // Check the pool object here
+        connection = await pool.getConnection();
+        console.log('DEBUG: In bookEvent - After getting connection from pool. Connection object:', connection);
+        // --- END DEBUGGING LOGS ---
 
-        // 1. Check if user already has an ACTIVE booking for this event
-        // Assuming bookingModel.findByUserIdAndEventId now takes a status parameter
+        await connection.beginTransaction();
+
         const existingBooking = await bookingModel.findByUserIdAndEventId(userId, eventId, 'confirmed', connection);
         if (existingBooking) {
-            await connection.rollback(); // Rollback if already booked
+            await connection.rollback();
             return res.status(409).json({ message: 'You already have an active booking for this event.' });
         }
 
-        // 2. Get event details and lock the row to prevent race conditions
         const [eventRows] = await connection.execute(
             'SELECT * FROM events WHERE id = ? FOR UPDATE',
             [eventId]
@@ -43,7 +46,7 @@ const bookEvent = async (req, res) => {
             await connection.rollback();
             return res.status(404).json({ message: 'Event not found.' });
         }
-        if (event.available_seats < parsedNumberOfTickets) { // Check against requested tickets
+        if (event.available_seats < parsedNumberOfTickets) {
             await connection.rollback();
             return res.status(400).json({ message: `Not enough available seats. Only ${event.available_seats} seats remaining.` });
         }
@@ -52,21 +55,16 @@ const bookEvent = async (req, res) => {
             return res.status(400).json({ message: 'Cannot book past events.' });
         }
 
-        // 3. Decrement available seats by the requested number of tickets
-        // eventModel.decrementAvailableSeats needs to accept numberOfTickets
         const decremented = await eventModel.decrementAvailableSeats(eventId, parsedNumberOfTickets, connection);
         if (!decremented) {
             await connection.rollback();
             return res.status(500).json({ message: 'Failed to decrement seats. Concurrency issue or insufficient seats.' });
         }
 
-        // 4. Create booking with number of tickets
-        // bookingModel.create needs to accept numberOfTickets
         const newBooking = await bookingModel.create(userId, eventId, parsedNumberOfTickets, connection);
 
-        await connection.commit(); // Commit the transaction
+        await connection.commit();
 
-        // Optional: Send email notification
         const emailSubject = `Event Booking Confirmation: ${event.title}`;
         const emailHtml = `
             <p>Dear ${userEmail},</p>
@@ -78,7 +76,6 @@ const bookEvent = async (req, res) => {
             <p>Best regards,</p>
             <p>The EventFlow Team</p>
         `;
-        // Send email asynchronously, don't block response
         emailService.sendEmail(userEmail, emailSubject, emailHtml)
             .then(success => {
                 if (success) {
@@ -95,13 +92,13 @@ const bookEvent = async (req, res) => {
 
     } catch (error) {
         if (connection) {
-            await connection.rollback(); // Rollback on any error
+            await connection.rollback();
         }
         console.error('Booking error:', error);
         res.status(500).json({ message: 'Internal server error during booking.' });
     } finally {
         if (connection) {
-            connection.release(); // Release the connection back to the pool
+            connection.release();
         }
     }
 };
@@ -117,7 +114,6 @@ const getMyBookings = async (req, res) => {
     }
 
     try {
-        // bookingModel.findByUserId needs to accept limit and offset for pagination
         const { bookings, total } = await bookingModel.findByUserId(userId, limit, offset);
         res.status(200).json({
             bookings,
@@ -132,22 +128,27 @@ const getMyBookings = async (req, res) => {
 };
 
 const cancelBooking = async (req, res) => {
-    const { id } = req.params; // Booking ID
+    const { id } = req.params;
     const userId = req.user.id;
-    const userRole = req.user.role; // For admin override
+    const userRole = req.user.role;
 
     let connection;
     try {
+        // --- ADDED DEBUGGING LOGS HERE ---
+        console.log('DEBUG: In cancelBooking - Before getting connection from pool');
+        console.log('DEBUG: Pool object in cancelBooking:', pool);
         connection = await pool.getConnection();
+        console.log('DEBUG: In cancelBooking - After getting connection from pool. Connection object:', connection);
+        // --- END DEBUGGING LOGS ---
+
         await connection.beginTransaction();
 
-        const booking = await bookingModel.findById(id, connection); // Pass connection for transaction
+        const booking = await bookingModel.findById(id, connection);
         if (!booking) {
             await connection.rollback();
             return res.status(404).json({ message: 'Booking not found.' });
         }
 
-        // Authorization check: Only booking owner or admin can cancel
         if (booking.user_id !== userId && userRole !== 'admin') {
             await connection.rollback();
             return res.status(403).json({ message: 'Not authorized to cancel this booking.' });
@@ -158,8 +159,8 @@ const cancelBooking = async (req, res) => {
             return res.status(400).json({ message: 'This booking is already cancelled.' });
         }
 
-        const event = await eventModel.findById(booking.event_id, connection); // Pass connection for transaction
-        if (!event) { // Event might have been deleted
+        const event = await eventModel.findById(booking.event_id, connection);
+        if (!event) {
             await connection.rollback();
             return res.status(404).json({ message: 'Associated event not found.' });
         }
@@ -169,16 +170,12 @@ const cancelBooking = async (req, res) => {
             return res.status(400).json({ message: 'Cannot cancel booking for a past event.' });
         }
 
-        // Update booking status to 'cancelled' instead of deleting
-        // bookingModel.updateStatus needs to be created
         const updated = await bookingModel.updateStatus(id, 'cancelled', connection);
         if (!updated) {
             await connection.rollback();
             return res.status(500).json({ message: 'Failed to update booking status to cancelled.' });
         }
 
-        // Increment available seats by the number of tickets from the cancelled booking
-        // eventModel.incrementAvailableSeats needs to accept numberOfTickets
         await eventModel.incrementAvailableSeats(booking.event_id, booking.number_of_tickets, connection);
 
         await connection.commit();

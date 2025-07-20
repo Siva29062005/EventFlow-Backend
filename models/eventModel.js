@@ -16,7 +16,6 @@ function formatMySQLDatetime(date) {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-// create function - no change needed here as it doesn't interact with username column
 const create = async (organizerId, title, description, venue, eventDate, capacity, imageUrl) => {
     const formattedEventDate = formatMySQLDatetime(eventDate);
     if (!formattedEventDate) {
@@ -39,7 +38,6 @@ const create = async (organizerId, title, description, venue, eventDate, capacit
     };
 };
 
-// Modified findAll function to JOIN users table and use u.email as creatorUsername
 const findAll = async (limit, offset, date, location, search) => {
     let query = `
         SELECT
@@ -50,11 +48,8 @@ const findAll = async (limit, offset, date, location, search) => {
         JOIN
             users u ON e.organizer_id = u.id
     `;
-    // --- CHANGE THIS LINE ---
-    // OLD: let countQuery = 'SELECT COUNT(*) as total FROM events';
-    // NEW:
-    let countQuery = 'SELECT COUNT(*) as total FROM events e'; // Count query doesn't need JOIN for total count
-    const params = []; // Parameters for WHERE clauses only
+    let countQuery = 'SELECT COUNT(*) as total FROM events e';
+    const params = [];
     let whereClauses = [];
 
     const hasOtherFilters = date || location || search;
@@ -85,27 +80,20 @@ const findAll = async (limit, offset, date, location, search) => {
 
     if (whereClauses.length > 0) {
         query += ' WHERE ' + whereClauses.join(' AND ');
-        countQuery += ' WHERE ' + whereClauses.join(' AND '); // Apply same WHERE clauses to count
+        countQuery += ' WHERE ' + whereClauses.join(' AND ');
     }
 
     query += ' ORDER BY e.event_date ASC';
     query += ` LIMIT ${limit} OFFSET ${offset}`;
 
-    console.log('SQL Query (main):', query);
-    console.log('SQL Params (main):', params);
-
     const [rows] = await pool.execute(query, params);
-
-    // For count query, params are the same as main query's WHERE clause params
-    // Remove limit/offset from count params as they are not for count query
     const [totalRows] = await pool.execute(countQuery, params.slice(0, params.length - 2));
 
     return { events: rows, total: totalRows[0].total };
 };
 
-// Modified findById function to JOIN users table and use u.email as creatorUsername
-const findById = async (id) => {
-    const [rows] = await pool.execute(`
+const findById = async (id, connection = null) => { // Added connection parameter for transactional reads
+    const [rows] = await (connection || pool).execute(`
         SELECT
             e.id, e.title, e.description, e.venue, e.event_date, e.capacity, e.available_seats,
             e.organizer_id AS creator, u.email AS creatorUsername, e.imageUrl, e.created_at
@@ -119,7 +107,6 @@ const findById = async (id) => {
     return rows[0];
 };
 
-// update function - no change needed here as it doesn't interact with username column
 const update = async (id, organizerId, title, description, venue, eventDate, capacity, imageUrl) => {
     const formattedEventDate = formatMySQLDatetime(eventDate);
     if (!formattedEventDate) {
@@ -132,22 +119,34 @@ const update = async (id, organizerId, title, description, venue, eventDate, cap
     return result.affectedRows > 0;
 };
 
-// remove function - no change needed here
 const remove = async (id, organizerId) => {
     const [result] = await pool.execute('DELETE FROM events WHERE id = ? AND organizer_id = ?', [id, organizerId]);
     return result.affectedRows > 0;
 };
 
-// For concurrency control in booking - no change needed
-const decrementAvailableSeats = async (eventId, connection) => {
-    const query = 'UPDATE events SET available_seats = available_seats - 1 WHERE id = ? AND available_seats > 0';
-    const [result] = await (connection || pool).execute(query, [eventId]);
+// --- CORRECTED: Now accepts numberOfTickets and includes debugging logs ---
+const decrementAvailableSeats = async (eventId, numberOfTickets, connection) => {
+    console.log('DEBUG: Inside eventModel.decrementAvailableSeats');
+    console.log('DEBUG: Type of "connection" parameter:', typeof connection);
+    console.log('DEBUG: Value of "connection" parameter:', connection); // Inspect the actual object
+    console.log('DEBUG: Type of "pool" (imported):', typeof pool);
+    console.log('DEBUG: Value of "pool" (imported):', pool); // Inspect the actual pool object
+
+    const query = 'UPDATE events SET available_seats = available_seats - ? WHERE id = ? AND available_seats >= ?';
+    const [result] = await (connection || pool).execute(query, [numberOfTickets, eventId, numberOfTickets]);
     return result.affectedRows > 0;
 };
 
-const incrementAvailableSeats = async (eventId, connection) => {
-    const query = 'UPDATE events SET available_seats = available_seats + 1 WHERE id = ?';
-    const [result] = await (connection || pool).execute(query, [eventId]);
+// --- CORRECTED: Now accepts numberOfTickets and includes debugging logs ---
+const incrementAvailableSeats = async (eventId, numberOfTickets, connection) => {
+    console.log('DEBUG: Inside eventModel.incrementAvailableSeats');
+    console.log('DEBUG: Type of "connection" parameter:', typeof connection);
+    console.log('DEBUG: Value of "connection" parameter:', connection);
+    console.log('DEBUG: Type of "pool" (imported):', typeof pool);
+    console.log('DEBUG: Value of "pool" (imported):', pool);
+
+    const query = 'UPDATE events SET available_seats = available_seats + ? WHERE id = ?';
+    const [result] = await (connection || pool).execute(query, [numberOfTickets, eventId]);
     return result.affectedRows > 0;
 };
 
