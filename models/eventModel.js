@@ -50,7 +50,10 @@ const findAll = async (limit, offset, date, location, search) => {
         JOIN
             users u ON e.organizer_id = u.id
     `;
-    let countQuery = 'SELECT COUNT(*) as total FROM events'; // Count query doesn't need JOIN for total count
+    // --- CHANGE THIS LINE ---
+    // OLD: let countQuery = 'SELECT COUNT(*) as total FROM events';
+    // NEW:
+    let countQuery = 'SELECT COUNT(*) as total FROM events e'; // Count query doesn't need JOIN for total count
     const params = []; // Parameters for WHERE clauses only
     let whereClauses = [];
 
