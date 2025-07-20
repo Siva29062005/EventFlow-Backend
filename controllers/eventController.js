@@ -36,15 +36,23 @@ function extractPublicIdFromCloudinaryUrl(url) {
 
 
 const createEvent = async (req, res) => {
-    const { title, description, venue, event_date, capacity } = req.body;
-    const organizerId = req.user.id; // From authenticated user token
-    const organizerUsername = req.user.username; // Still get it from req.user for logging/other uses if needed
+    // --- DEBUGGING LOG 5: AT START OF CONTROLLER ---
+    console.log('--- Inside createEvent Controller (Final Check) ---');
+    console.log('req.body (in controller):', req.body); // <<<--- SHOULD NOW HAVE YOUR TEXT DATA
+    console.log('req.file (in controller):', req.file); // <<<--- SHOULD NOW HAVE YOUR FILE DATA
+    console.log('--------------------------------------------------');
+    // --- END DEBUGGING LOG ---
 
-    let imageUrl = null; // Initialize imageUrl to null
+    const { title, description, venue, event_date, capacity } = req.body;
+    const organizerId = req.user.id;
+    // const organizerUsername = req.user.username; // No longer passed to model.create
+
+    let imageUrl = null;
 
     if (!title || !venue || !event_date || !capacity) {
         return res.status(400).json({ message: 'Missing required event fields: title, venue, event_date, capacity.' });
     }
+
 
     // Input validation for event_date and capacity
     const parsedEventDate = new Date(event_date);
@@ -132,15 +140,21 @@ const getEventById = async (req, res) => {
 };
 
 const updateEvent = async (req, res) => {
+    // --- DEBUGGING LOG 6: AT START OF CONTROLLER (for Update) ---
+    console.log('--- Inside updateEvent Controller (Final Check) ---');
+    console.log('req.body (in controller - update):', req.body); // <<<--- SHOULD NOW HAVE YOUR TEXT DATA
+    console.log('req.file (in controller - update):', req.file); // <<<--- SHOULD NOW HAVE YOUR FILE DATA
+    console.log('--------------------------------------------------');
+    // --- END DEBUGGING LOG ---
+
     const { id } = req.params;
     const { title, description, venue, event_date, capacity } = req.body;
-    const organizerId = req.user.id; // From authenticated user token
-    const userRole = req.user.role; // From authenticated user token
+    const organizerId = req.user.id;
+    const userRole = req.user.role;
 
     if (!title || !venue || !event_date || !capacity) {
         return res.status(400).json({ message: 'Missing required event fields for update.' });
     }
-
     const parsedEventDate = new Date(event_date);
     if (isNaN(parsedEventDate.getTime())) {
         return res.status(400).json({ message: 'Invalid event date format for update.' });
