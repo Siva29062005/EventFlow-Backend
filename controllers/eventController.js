@@ -75,7 +75,11 @@ const createEvent = async (req, res) => {
     try {
         if (req.file) { // Check if an image file was uploaded via multer
             // Upload image to Cloudinary
-            const result = await cloudinary.uploader.upload(req.file.buffer.toString('base64'), {
+           const base64Image = req.file.buffer.toString('base64');
+            const dataUri = `data:${req.file.mimetype};base64,${base64Image}`;
+
+            // Upload image to Cloudinary using the data URI
+            const result = await cloudinary.uploader.upload(dataUri, {
                 folder: 'event_images', // Optional: organize images in a specific folder in Cloudinary
                 resource_type: 'auto'  // Cloudinary will auto-detect file type (image, video, raw)
             });
@@ -204,11 +208,16 @@ const updateEvent = async (req, res) => {
             }
 
             // Upload the new image to Cloudinary
-            const result = await cloudinary.uploader.upload(req.file.buffer.toString('base64'), {
+           // --- CRITICAL CHANGE HERE FOR UPLOAD ---
+            const base64Image = req.file.buffer.toString('base64');
+            const dataUri = `data:${req.file.mimetype};base64,${base64Image}`;
+
+            // Upload the new image to Cloudinary using the data URI
+            const result = await cloudinary.uploader.upload(dataUri, { // <--- Changed from req.file.buffer.toString('base64') to dataUri
                 folder: 'event_images',
                 resource_type: 'auto'
             });
-            imageUrlToSave = result.secure_url; // Use the new image URL
+            imageUrlToSave = result.secure_url;
         }
         // If req.file is null/undefined, imageUrlToSave remains the existing one.
         // If you want a way to explicitly remove an image without replacing it,
